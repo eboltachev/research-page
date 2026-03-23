@@ -5,6 +5,8 @@ services:
     restart: unless-stopped
     networks:
       - reverse_proxy_net
+    ports: 
+      - "8005:8005"
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8005/healthz"]
       interval: 30s
@@ -20,7 +22,7 @@ services:
       - traefik.http.routers.research-page.tls=true
       - traefik.http.routers.research-page.tls.certresolver=letsencrypt
       - traefik.http.routers.research-page.service=research-page-svc
-      - traefik.http.services.research-page.loadbalancer.server.port=80
+      - traefik.http.services.research-page-svc.loadbalancer.server.port=8005
 
       # Middlewares
       - traefik.http.routers.research-page.middlewares=secureHeaders@file
