@@ -38,3 +38,6 @@ select = ["E", "F", "I", "UP"]
 [build-system]
 requires = ["hatchling>=1.26.0"]
 build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
