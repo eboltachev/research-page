@@ -18,10 +18,14 @@ RUN set -eux; \
 
 WORKDIR ${APPLICATION_WORK_DIR}
 
+RUN chown -R corex:corex ${APPLICATION_WORK_DIR}
+
 COPY --chown=corex:corex pyproject.toml uv.lock .python-version ./
 
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy
+
+USER corex
 
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-install-project --no-dev
@@ -29,8 +33,6 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 COPY --chown=corex:corex app ./app
 COPY --chown=corex:corex configs ./configs
 COPY --chown=corex:corex README.md ./
-
-USER corex
 
 EXPOSE 8005
 

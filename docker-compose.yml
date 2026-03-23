@@ -20,7 +20,7 @@ services:
       - traefik.http.routers.research-page.tls=true
       - traefik.http.routers.research-page.tls.certresolver=letsencrypt
       - traefik.http.routers.research-page.service=research-page-svc
-      - traefik.http.services.research-page-svc.loadbalancer.server.port=8000
+      - traefik.http.services.research-page.loadbalancer.server.port=80
 
       # Middlewares
       - traefik.http.routers.research-page.middlewares=secureHeaders@file

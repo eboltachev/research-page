@@ -341,7 +341,7 @@ def research_password_form(request: Request, research_path: str) -> HTMLResponse
     )
 
 
-@app.post("/go/{research_path:path}")
+@app.post("/go/{research_path:path}", response_model=None)
 def research_password_submit(
     request: Request,
     research_path: str,
