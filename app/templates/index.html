@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Research results{% endblock %}
+
+{% block content %}
+<section class="cards">
+  {% for card in cards %}
+  <article class="card">
+    <h2><a href="/go/{{ card.path }}">{{ card.name }}</a></h2>
+    <p>{{ card.description }}</p>
+    {% if card.external %}
+    <div class="links">
+      {% for ext in card.external %}
+      <a href="{{ ext.url }}" target="_blank" rel="noopener noreferrer" title="{{ ext.name }}">
+        <img src="{{ ext.icon }}" alt="{{ ext.name }}" />
+      </a>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </article>
+  {% else %}
+  <article class="card empty">
+    <h2>Нет исследований</h2>
+    <p>Добавьте записи в <code>configs/routers.yml</code>.</p>
+  </article>
+  {% endfor %}
+</section>
+{% endblock %}
