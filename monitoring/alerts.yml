@@ -1,0 +1,29 @@
+groups:
+  - name: research-page-alerts
+    rules:
+      - alert: ResearchPageHighRateLimit
+        expr: increase(http_429_total[5m]) > 50
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High 429 rate on research-page"
+          description: "More than 50 rate-limited requests in 5 minutes."
+
+      - alert: ResearchPageSlowRequests
+        expr: increase(http_slow_requests_total[5m]) > 20
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High slow-request volume"
+          description: "More than 20 requests took >=1000ms over 5 minutes."
+
+      - alert: ResearchPageDown
+        expr: up{job="research-page"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "research-page target is down"
+          description: "Prometheus cannot scrape research-page for at least 5 minutes."

@@ -1,0 +1,42 @@
+services:
+  app:
+    build: .
+    image: research-page
+    restart: unless-stopped
+    networks:
+      - reverse_proxy_net
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    labels:
+      - traefik.enable=true
+
+      # HTTPS router
+      - traefik.http.routers.research-page.rule=Host(`research.aicorex.tech`)
+      - traefik.http.routers.research-page.entrypoints=https
+      - traefik.http.routers.research-page.tls=true
+      - traefik.http.routers.research-page.tls.certresolver=letsencrypt
+      - traefik.http.routers.research-page.service=research-page-svc
+      - traefik.http.services.research-page-svc.loadbalancer.server.port=8000
+
+      # Middlewares
+      - traefik.http.routers.research-page.middlewares=secureHeaders@file
+
+      # HTTP -> HTTPS
+      - traefik.http.routers.research-page-redirect.rule=Host(`research.aicorex.tech`)
+      - traefik.http.routers.research-page-redirect.entrypoints=http
+      - traefik.http.routers.research-page-redirect.middlewares=redirect-to-https
+
+      - traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https
+      - traefik.http.middlewares.redirect-to-https.redirectscheme.permanent=true
+
+      # Docker network for Traefik
+      - traefik.docker.network=traefik_reverse_proxy_net
+
+networks:
+  reverse_proxy_net:
+    external: true
+    name: traefik_reverse_proxy_net

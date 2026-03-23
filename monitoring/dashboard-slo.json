@@ -1,0 +1,20 @@
+{
+  "title": "research-page SLO/SLA",
+  "panels": [
+    {
+      "title": "HTTP 429 rate (5m)",
+      "type": "timeseries",
+      "expr": "increase(http_429_total[5m])"
+    },
+    {
+      "title": "Slow requests (>=1000ms, 5m)",
+      "type": "timeseries",
+      "expr": "increase(http_slow_requests_total[5m])"
+    },
+    {
+      "title": "Total requests (5m)",
+      "type": "timeseries",
+      "expr": "increase(http_requests_total[5m])"
+    }
+  ]
+}

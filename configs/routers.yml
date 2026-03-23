@@ -1,0 +1,17 @@
+- path: eboltachev/demo-app
+  url: http://192.168.1.100:8000
+  password: StrongPassword123!
+  name: Demo research
+  description: Демонстрация структуры карточки исследования для главной страницы.
+  external:
+    - https://github.com/
+    - https://www.elibrary.ru/
+
+- path: ivanov/text-mining
+  url: http://container-name:5000
+  password: StrongPassword123!
+  name: Text mining benchmark
+  description: Сравнение моделей для извлечения сущностей и классификации документов.
+  external:
+    - https://www.kaggle.com/
+    - https://github.com/

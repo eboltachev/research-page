@@ -1,0 +1,142 @@
+import importlib.util
+from pathlib import Path
+
+import pytest
+
+REQUIRED_MODULES = ["fastapi", "jinja2", "markdown", "bleach", "pydantic", "yaml"]
+missing = [name for name in REQUIRED_MODULES if importlib.util.find_spec(name) is None]
+if missing:
+    pytest.skip(
+        f"Skipped integration tests because modules are missing: {', '.join(missing)}",
+        allow_module_level=True,
+    )
+
+import yaml
+from fastapi.testclient import TestClient
+
+import app.main as main
+
+
+@pytest.fixture()
+def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
+    routers = tmp_path / "routers.yml"
+    info = tmp_path / "information.md"
+    monkeypatch.setattr(main, "ROUTERS_FILE", routers)
+    monkeypatch.setattr(main, "INFORMATION_FILE", info)
+    main.cache._routers_mtime = None
+    main.cache._info_mtime = None
+    main.rate_limiter = main.InMemoryRateLimiter(max_requests=1000, window_seconds=60)
+    return TestClient(main.app)
+
+
+def test_healthcheck(client: TestClient) -> None:
+    response = client.get("/healthz")
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+
+
+def test_invalid_router_record_does_not_break_page(client: TestClient) -> None:
+    data = [
+        {"name": "broken"},
+        {
+            "path": "eboltachev/demo",
+            "url": "http://example.com/demo",
+            "password": "StrongPassword123!",
+            "name": "ok",
+            "description": "desc",
+            "external": ["https://github.com", "bad://url"],
+        },
+    ]
+    main.ROUTERS_FILE.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+
+    response = client.get("/")
+    assert response.status_code == 200
+    assert "ok" in response.text
+    assert "/go/eboltachev/demo" in response.text
+    assert "broken" not in response.text
+
+
+def test_external_links_sorted(client: TestClient) -> None:
+    data = [
+        {
+            "path": "eboltachev/demo",
+            "url": "http://example.com/demo",
+            "password": "StrongPassword123!",
+            "name": "demo",
+            "description": "desc",
+            "external": ["https://www.kaggle.com", "https://github.com"],
+        }
+    ]
+    main.ROUTERS_FILE.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+
+    response = client.get("/")
+    assert response.status_code == 200
+    github_pos = response.text.find("github.com")
+    kaggle_pos = response.text.find("kaggle.com")
+    assert github_pos != -1 and kaggle_pos != -1
+    assert github_pos < kaggle_pos
+
+
+def test_information_sanitized(client: TestClient) -> None:
+    main.INFORMATION_FILE.write_text("# title\n<script>alert(1)</script>", encoding="utf-8")
+
+    response = client.get("/information")
+    assert response.status_code == 200
+    assert "<script>" not in response.text
+
+
+def test_metrics_endpoint(client: TestClient) -> None:
+    client.get("/")
+    response = client.get("/metrics")
+    assert response.status_code == 200
+    assert "http_requests_total" in response.text
+
+
+def test_rate_limit_returns_429(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(main, "ROUTERS_FILE", tmp_path / "routers.yml")
+    monkeypatch.setattr(main, "INFORMATION_FILE", tmp_path / "information.md")
+    main.ROUTERS_FILE.write_text("[]", encoding="utf-8")
+    main.rate_limiter = main.InMemoryRateLimiter(max_requests=1, window_seconds=60)
+    local_client = TestClient(main.app)
+
+    first = local_client.get("/")
+    second = local_client.get("/")
+
+    assert first.status_code == 200
+    assert second.status_code == 429
+
+
+def test_password_gate_redirect_on_valid_password(client: TestClient) -> None:
+    data = [{
+        "path": "eboltachev/demo",
+        "url": "http://example.com/demo",
+        "password": "StrongPassword123!",
+        "name": "demo",
+        "description": "desc",
+        "external": [],
+    }]
+    main.ROUTERS_FILE.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+
+    response = client.post(
+        "/go/eboltachev/demo",
+        data={"password": "StrongPassword123!"},
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    assert response.headers["location"] == "http://example.com/demo"
+
+
+def test_password_gate_denies_invalid_password(client: TestClient) -> None:
+    data = [{
+        "path": "eboltachev/demo",
+        "url": "http://example.com/demo",
+        "password": "StrongPassword123!",
+        "name": "demo",
+        "description": "desc",
+        "external": [],
+    }]
+    main.ROUTERS_FILE.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+
+    response = client.post("/go/eboltachev/demo", data={"password": "wrong"})
+    assert response.status_code == 401
+    assert "Неверный пароль" in response.text
