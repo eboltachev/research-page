@@ -2,14 +2,14 @@ FROM python:3.12-slim
 
 ARG APPLICATION_WORK_DIR=/app
 ARG API_HOST=0.0.0.0
-ARG API_PORT=8000
+ARG API_PORT=8005
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1
 
 RUN set -eux; \
-    groupadd -g 1000 cx; \
-    useradd -m -u 1000 -g 1000 -s /bin/bash cx; \
+    groupadd -g 1000 corex; \
+    useradd -m -u 1000 -g 1000 -s /bin/bash corex; \
     apt-get update; \
     apt-get install -y --no-install-recommends curl ca-certificates; \
     pip install --no-cache-dir uv; \
@@ -18,20 +18,20 @@ RUN set -eux; \
 
 WORKDIR ${APPLICATION_WORK_DIR}
 
-COPY --chown=cx:cx pyproject.toml uv.lock .python-version ./
+COPY --chown=corex:corex pyproject.toml uv.lock .python-version ./
 
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy
 
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip sync uv.lock
+    uv sync --locked --no-install-project --no-dev
 
-COPY --chown=cx:cx app ./app
-COPY --chown=cx:cx configs ./configs
-COPY --chown=cx:cx README.md ./
+COPY --chown=corex:corex app ./app
+COPY --chown=corex:corex configs ./configs
+COPY --chown=corex:corex README.md ./
 
-USER cx
+USER corex
 
-EXPOSE 8000
+EXPOSE 8005
 
-ENTRYPOINT ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+ENTRYPOINT ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8005"]
