@@ -1,2 +1,4 @@
 __pycache__/
 *.pyc
+configs/routers.yml
+configs/information.md
