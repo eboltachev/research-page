@@ -235,7 +235,7 @@ def _normalize_external(external: list[SourceRecord]) -> list[dict[str, str]]:
             )
         )
 
-    links.sort(key=lambda x: _normalize_hostname(x.href))
+    # links.sort(key=lambda x: _normalize_hostname(x.href))
     return [item.model_dump() for item in links]
 
 
