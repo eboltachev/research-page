@@ -1,15 +1,15 @@
 - path: corexsystems/multimodal-rag
-  url: https://corexsystems.ai/research/multimodal-rag
-  password: StrongPassword123!
+  url: http://172.17.0.1:11111
+  password:
   name: Multimodal RAG for Scientific Documentation
   description: Система поиска и аналитики по научно-техническим документам с мультимодальным индексированием, семантическим поиском и навигацией по связанным материалам.
   sources:
-    - href: https://elibrary.ru
     - href: https://github.com/corexsystems/multimodal-rag
+    - href: https://elibrary.ru
 
 - path: corexsystems/call-center-quality
-  url: https://corexsystems.ai/research/call-center-quality
-  password: StrongPassword123!
+  url: http://172.17.0.1:11112
+  password:
   name: Call Center Quality Intelligence
   description: Исследование оценки операторов на основе транскриптов, событий разговора и LLM-аналитики с последующим развёртыванием в виде целевого лендинга.
   sources:
@@ -17,11 +17,10 @@
     - href: https://kaggle.com
 
 - path: corexsystems/graphrag-navigator
-  url: https://corexsystems.ai/research/graphrag-navigator
-  password: StrongPassword123!
+  url: http://172.17.0.1:11113
+  password:
   name: GraphRAG Knowledge Navigator
   description: Графовая навигация по сущностям, связям и источникам знаний для исследовательских и корпоративных сценариев с возможностью быстрого перехода в приложение.
   sources:
     - href: https://github.com/corexsystems/graphrag-navigator
-    - href: https://neo4j.com
-    - href: https://opensearch.org
+    - href: https://elibrary.ru
