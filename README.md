@@ -10,7 +10,9 @@ docker compose up --build -d
 
 ## Конфигурация
 
-- `configs/routers.yml` — список карточек исследований (`path`, `url`, `password`, `name`, `description`, `external`).
+- `configs/routers.yml` — список карточек исследований (`path`, `url`, `password`, `name`, `description`, `sources`).
+  - `sources` поддерживает формат `[{ href, label? }]`.
+  - Для обратной совместимости также принимается устаревшее поле `external`.
 - `configs/information.md` — markdown-контент страницы `/information`.
 
 Изменения в конфигурации подхватываются динамически, с кэшированием по `mtime` файлов.

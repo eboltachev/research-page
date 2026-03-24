@@ -17,11 +17,11 @@
         </h2>
         <p>{{ card.description }}</p>
 
-        {% if card.external %}
+        {% if card.sources %}
         <div class="links">
-          {% for ext in card.external %}
-          <a href="{{ ext.url }}" target="_blank" rel="noopener noreferrer" title="{{ ext.name }}" aria-label="{{ ext.name }}">
-            <img src="{{ ext.icon }}" alt="{{ ext.name }}" />
+          {% for source in card.sources %}
+          <a href="{{ source.href }}" target="_blank" rel="noopener noreferrer" title="{{ source.title }}" aria-label="{{ source.title }}">
+            <img src="{{ source.icon }}" alt="{{ source.title }}" />
           </a>
           {% endfor %}
         </div>

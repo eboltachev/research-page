@@ -3,12 +3,12 @@
   password: StrongPassword123!
   name: Multimodal RAG
   description: Поисковая система в мультимодальных базах знаний с использованием методов и моделей машинного обучения
-  external:
-    - https://github.com
+  sources:
+    - href: https://github.com
 - path: dshalmanov/audio-denoizing
   url: http://container-name:5000
   password: StrongPassword123!
   name: Audio Denoizing 
   description: Модели машинного обучения детекции и фильтрации аудиосигналов для улучшения качества распознавания речи
-  external:
-    - https://github.com
+  sources:
+    - href: https://github.com

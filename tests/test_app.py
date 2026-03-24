@@ -44,7 +44,7 @@ def test_invalid_router_record_does_not_break_page(client: TestClient) -> None:
             "password": "StrongPassword123!",
             "name": "ok",
             "description": "desc",
-            "external": ["https://github.com", "bad://url"],
+            "sources": [{"href": "https://github.com"}, {"href": "bad://url"}],
         },
     ]
     main.ROUTERS_FILE.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
@@ -64,7 +64,7 @@ def test_external_links_sorted(client: TestClient) -> None:
             "password": "StrongPassword123!",
             "name": "demo",
             "description": "desc",
-            "external": ["https://www.kaggle.com", "https://github.com"],
+            "sources": [{"href": "https://www.kaggle.com"}, {"href": "https://github.com"}],
         }
     ]
     main.ROUTERS_FILE.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
@@ -113,7 +113,7 @@ def test_password_gate_redirect_on_valid_password(client: TestClient) -> None:
         "password": "StrongPassword123!",
         "name": "demo",
         "description": "desc",
-        "external": [],
+        "sources": [],
     }]
     main.ROUTERS_FILE.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
 
@@ -133,7 +133,7 @@ def test_password_gate_denies_invalid_password(client: TestClient) -> None:
         "password": "StrongPassword123!",
         "name": "demo",
         "description": "desc",
-        "external": [],
+        "sources": [],
     }]
     main.ROUTERS_FILE.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
 
