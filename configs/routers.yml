@@ -1,14 +1,27 @@
-- path: azhivotkevich/multimodal-rag
-  url: http://192.168.1.100:5173
+- path: corexsystems/multimodal-rag
+  url: https://corexsystems.ai/research/multimodal-rag
   password: StrongPassword123!
-  name: Multimodal RAG
-  description: Поисковая система в мультимодальных базах знаний с использованием методов и моделей машинного обучения
+  name: Multimodal RAG for Scientific Documentation
+  description: Система поиска и аналитики по научно-техническим документам с мультимодальным индексированием, семантическим поиском и навигацией по связанным материалам.
   sources:
-    - href: https://github.com
-- path: dshalmanov/audio-denoizing
-  url: http://container-name:5000
+    - href: https://elibrary.ru
+    - href: https://github.com/corexsystems/multimodal-rag
+
+- path: corexsystems/call-center-quality
+  url: https://corexsystems.ai/research/call-center-quality
   password: StrongPassword123!
-  name: Audio Denoizing 
-  description: Модели машинного обучения детекции и фильтрации аудиосигналов для улучшения качества распознавания речи
+  name: Call Center Quality Intelligence
+  description: Исследование оценки операторов на основе транскриптов, событий разговора и LLM-аналитики с последующим развёртыванием в виде целевого лендинга.
   sources:
-    - href: https://github.com
+    - href: https://github.com/corexsystems/call-center-quality
+    - href: https://kaggle.com
+
+- path: corexsystems/graphrag-navigator
+  url: https://corexsystems.ai/research/graphrag-navigator
+  password: StrongPassword123!
+  name: GraphRAG Knowledge Navigator
+  description: Графовая навигация по сущностям, связям и источникам знаний для исследовательских и корпоративных сценариев с возможностью быстрого перехода в приложение.
+  sources:
+    - href: https://github.com/corexsystems/graphrag-navigator
+    - href: https://neo4j.com
+    - href: https://opensearch.org
