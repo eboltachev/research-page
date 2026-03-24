@@ -15,7 +15,7 @@ from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel, Field, ValidationError, field_validator
+from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
 from app.metrics import prometheus_text
 from app.rate_limit import (
@@ -71,9 +71,14 @@ logger.addHandler(handler)
 logger.setLevel(logging.INFO)
 
 
+class SourceRecord(BaseModel):
+    href: str
+    label: str | None = None
+
+
 class ExternalLink(BaseModel):
-    url: str
-    name: str
+    href: str
+    title: str
     icon: str
 
 
@@ -83,7 +88,35 @@ class RouterRecord(BaseModel):
     password: str = Field(min_length=1)
     name: str = Field(min_length=1)
     description: str = Field(min_length=1)
-    external: list[str]
+    sources: list[SourceRecord] = Field(default_factory=list)
+
+    @model_validator(mode="before")
+    @classmethod
+    def coerce_sources(cls, value: object) -> object:
+        if not isinstance(value, dict):
+            return value
+
+        raw_sources = value.get("sources")
+        if raw_sources is None and "external" in value:
+            raw_sources = value.get("external")
+
+        if isinstance(raw_sources, list):
+            normalized: list[dict[str, str]] = []
+            for item in raw_sources:
+                if isinstance(item, str):
+                    normalized.append({"href": item})
+                elif isinstance(item, dict):
+                    href = item.get("href") or item.get("url")
+                    if not href:
+                        normalized.append(item)
+                        continue
+                    label = item.get("label") or item.get("name")
+                    normalized.append({"href": href, "label": label})
+                else:
+                    normalized.append(item)
+            value["sources"] = normalized
+
+        return value
 
 
     @field_validator("url")
@@ -178,29 +211,33 @@ app.mount("/static", StaticFiles(directory=BASE_DIR / "app" / "static"), name="s
 templates = Jinja2Templates(directory=str(BASE_DIR / "app" / "templates"))
 
 
-def _resource_name(url: str) -> str:
+def _normalize_hostname(url: str) -> str:
     host = urlparse(url).netloc.lower().replace("www.", "")
     return host or url
 
 
 def _icon_for_url(url: str) -> str:
-    domain = _resource_name(url)
+    domain = _normalize_hostname(url)
     return ICON_BY_DOMAIN.get(domain, "/static/icons/web.svg")
 
 
-def _normalize_external(external: list[str], idx: int) -> list[dict[str, str]]:
+def _normalize_external(external: list[SourceRecord]) -> list[dict[str, str]]:
     links: list[ExternalLink] = []
-    for raw_url in external:
-        parsed = urlparse(raw_url)
+    for source in external:
+        href = source.href
+        parsed = urlparse(href)
         if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-            logger.warning("Record %s: skipped invalid external url '%s'", idx, raw_url)
             continue
-
+        hostname = _normalize_hostname(href)
         links.append(
-            ExternalLink(url=raw_url, name=_resource_name(raw_url), icon=_icon_for_url(raw_url))
+            ExternalLink(
+                href=href,
+                title=source.label or hostname,
+                icon=_icon_for_url(href),
+            )
         )
 
-    links.sort(key=lambda x: x.name)
+    links.sort(key=lambda x: _normalize_hostname(x.href))
     return [item.model_dump() for item in links]
 
 
@@ -236,7 +273,7 @@ def _load_routers_uncached() -> list[dict[str, object]]:
                 "password": parsed.password,
                 "name": parsed.name,
                 "description": parsed.description,
-                "external": _normalize_external(parsed.external, idx),
+                "sources": _normalize_external(parsed.sources),
             }
         )
 

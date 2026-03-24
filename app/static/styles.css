@@ -158,6 +158,13 @@ body {
   text-decoration-color: rgba(139, 231, 255, 0.7);
 }
 
+.card h2 a:focus-visible,
+.links a:focus-visible,
+.page-footer a:focus-visible {
+  outline: 2px solid rgba(139, 231, 255, 0.9);
+  outline-offset: 2px;
+}
+
 .title-arrow {
   font-size: 0.8em;
   margin-left: 0.35rem;
