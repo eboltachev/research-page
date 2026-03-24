@@ -37,8 +37,6 @@ RATE_LIMIT_KEY_PREFIX = os.getenv("RATE_LIMIT_KEY_PREFIX", "research:rl")
 
 ICON_BY_DOMAIN = {
     "github.com": "/static/icons/github.svg",
-    "kaggle.com": "/static/icons/kaggle.svg",
-    "elibrary.ru": "/static/icons/elibrary.svg",
 }
 
 ALLOWED_TAGS = set(bleach.sanitizer.ALLOWED_TAGS).union(
