@@ -7,19 +7,21 @@
     <link rel="stylesheet" href="{{ url_for('static', path='/styles.css') }}" />
   </head>
   <body>
-    <div class="page-wrap">
-      <header>
-        <h1>Research results</h1>
-        <p class="subtitle">research.aicorex.tech</p>
+    <div class="bg-layer"></div>
+    <div class="grid-layer"></div>
+
+    <main class="page-wrap">
+      <header class="page-header">
+        <div class="brand-left">CoreX</div>
+        <div class="brand-right">Research</div>
       </header>
 
-      <main>
-        {% block content %}{% endblock %}
-      </main>
+      {% block content %}{% endblock %}
 
-      <footer>
+      <footer class="page-footer">
         <a href="/information">Information</a>
+        <span>CoreX Research</span>
       </footer>
-    </div>
+    </main>
   </body>
 </html>
