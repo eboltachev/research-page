@@ -2,5 +2,13 @@
 {% block title %}Information{% endblock %}
 
 {% block content %}
-<article class="card markdown-body">{{ content | safe }}</article>
+<section class="cards info-page">
+  <article class="card">
+    <div class="card-edge"></div>
+    <div class="card-layout">
+      <div class="card-number">i</div>
+      <div class="card-content markdown-body">{{ content | safe }}</div>
+    </div>
+  </article>
+</section>
 {% endblock %}
