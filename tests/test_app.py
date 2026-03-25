@@ -172,10 +172,11 @@ def test_entrypoint_redirects_directly_for_public_route(
     }]
     main.ROUTERS_FILE.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
 
-    async def fake_proxy_request(_request, target_url: str):
+    async def fake_proxy_request(_request, target_url: str, path_prefix: str):
         from fastapi.responses import PlainTextResponse
 
         assert target_url == "http://example.com/demo"
+        assert path_prefix == "/eboltachev/demo"
         return PlainTextResponse("proxied", status_code=200)
 
     monkeypatch.setattr(main, "_proxy_request", fake_proxy_request)
@@ -213,10 +214,11 @@ def test_entrypoint_proxies_nested_path(
     }]
     main.ROUTERS_FILE.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
 
-    async def fake_proxy_request(_request, target_url: str):
+    async def fake_proxy_request(_request, target_url: str, path_prefix: str):
         from fastapi.responses import PlainTextResponse
 
         assert target_url == "http://example.com/demo/assets/app.js"
+        assert path_prefix == "/eboltachev/demo"
         return PlainTextResponse("nested-proxied", status_code=200)
 
     monkeypatch.setattr(main, "_proxy_request", fake_proxy_request)
@@ -238,10 +240,11 @@ def test_entrypoint_proxies_protected_route_after_password_submit(
     }]
     main.ROUTERS_FILE.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
 
-    async def fake_proxy_request(_request, target_url: str):
+    async def fake_proxy_request(_request, target_url: str, path_prefix: str):
         from fastapi.responses import PlainTextResponse
 
         assert target_url == "http://example.com/demo"
+        assert path_prefix == "/eboltachev/demo"
         return PlainTextResponse("protected-proxied", status_code=200)
 
     monkeypatch.setattr(main, "_proxy_request", fake_proxy_request)
@@ -257,3 +260,30 @@ def test_entrypoint_proxies_protected_route_after_password_submit(
     response = client.get("/eboltachev/demo")
     assert response.status_code == 200
     assert response.text == "protected-proxied"
+
+
+def test_entrypoint_uses_active_path_cookie_for_root_absolute_assets(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    data = [{
+        "path": "eboltachev/demo",
+        "url": "http://example.com/demo",
+        "password": "",
+        "name": "demo",
+        "description": "desc",
+        "sources": [],
+    }]
+    main.ROUTERS_FILE.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+    client.cookies.set("research_active_path", "eboltachev/demo")
+
+    async def fake_proxy_request(_request, target_url: str, path_prefix: str):
+        from fastapi.responses import PlainTextResponse
+
+        assert target_url == "http://example.com/demo/openapi.json"
+        assert path_prefix == "/eboltachev/demo"
+        return PlainTextResponse("asset-proxied", status_code=200)
+
+    monkeypatch.setattr(main, "_proxy_request", fake_proxy_request)
+    response = client.get("/openapi.json")
+    assert response.status_code == 200
+    assert response.text == "asset-proxied"

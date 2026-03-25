@@ -434,7 +434,7 @@ def _has_access_cookie(request: Request, path: str) -> bool:
     return hmac.compare_digest(signature, expected)
 
 
-async def _proxy_request(request: Request, target_url: str) -> Response:
+async def _proxy_request(request: Request, target_url: str, path_prefix: str) -> Response:
     hop_by_hop_headers = {
         "connection",
         "keep-alive",
@@ -466,8 +466,22 @@ async def _proxy_request(request: Request, target_url: str) -> Response:
         for key, value in upstream.headers.items()
         if key.lower() not in hop_by_hop_headers
     }
+
+    location = response_headers.get("location")
+    if location and location.startswith("/"):
+        response_headers["location"] = f"{path_prefix}{location}"
+
+    content = upstream.content
+    content_type = upstream.headers.get("content-type", "")
+    if "text/html" in content_type and content:
+        html = content.decode("utf-8", errors="ignore")
+        html = html.replace('href="/', f'href="{path_prefix}/')
+        html = html.replace('src="/', f'src="{path_prefix}/')
+        html = html.replace("url: '/", f"url: '{path_prefix}/")
+        content = html.encode("utf-8")
+
     return Response(
-        content=upstream.content,
+        content=content,
         status_code=upstream.status_code,
         headers=response_headers,
         media_type=upstream.headers.get("content-type"),
@@ -542,6 +556,13 @@ def metrics_endpoint() -> str:
 async def research_entrypoint(request: Request, research_path: str) -> Response:
     card, target_url = _resolve_router_target(research_path)
     if not card or not target_url:
+        active_path = request.cookies.get("research_active_path")
+        active_card = _find_router_by_path(active_path) if active_path else None
+        if active_card:
+            target_url = f"{str(active_card.get('url')).rstrip('/')}/{research_path.strip('/')}"
+            card = active_card
+
+    if not card or not target_url:
         raise HTTPException(status_code=404, detail="Research not found")
 
     if card.get("password"):
@@ -549,4 +570,14 @@ async def research_entrypoint(request: Request, research_path: str) -> Response:
         if not _has_access_cookie(request, card_path):
             return RedirectResponse(url=f"/go/{card_path}", status_code=307)
 
-    return await _proxy_request(request, target_url)
+    response = await _proxy_request(request, target_url, f"/{card.get('path')}")
+    response.set_cookie(
+        key="research_active_path",
+        value=str(card.get("path")),
+        max_age=PASSWORD_GATE_COOKIE_MAX_AGE,
+        httponly=True,
+        samesite="lax",
+        secure=True,
+        path="/",
+    )
+    return response
