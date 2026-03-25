@@ -52,7 +52,7 @@ def test_invalid_router_record_does_not_break_page(client: TestClient) -> None:
     response = client.get("/")
     assert response.status_code == 200
     assert "ok" in response.text
-    assert "/go/eboltachev/demo" in response.text
+    assert "/eboltachev/demo" in response.text
     assert "broken" not in response.text
 
 
@@ -123,7 +123,8 @@ def test_password_gate_redirect_on_valid_password(client: TestClient) -> None:
         follow_redirects=False,
     )
     assert response.status_code == 303
-    assert response.headers["location"] == "http://example.com/demo"
+    assert response.headers["location"] == "/eboltachev/demo"
+    assert "research_access_" in response.headers["set-cookie"]
 
 
 def test_password_gate_denies_invalid_password(client: TestClient) -> None:
@@ -140,3 +141,149 @@ def test_password_gate_denies_invalid_password(client: TestClient) -> None:
     response = client.post("/go/eboltachev/demo", data={"password": "wrong"})
     assert response.status_code == 401
     assert "Неверный пароль" in response.text
+
+
+def test_entrypoint_redirects_to_password_gate_for_protected_route(client: TestClient) -> None:
+    data = [{
+        "path": "eboltachev/demo",
+        "url": "http://example.com/demo",
+        "password": "StrongPassword123!",
+        "name": "demo",
+        "description": "desc",
+        "sources": [],
+    }]
+    main.ROUTERS_FILE.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+
+    response = client.get("/eboltachev/demo", follow_redirects=False)
+    assert response.status_code == 307
+    assert response.headers["location"] == "/go/eboltachev/demo"
+
+
+def test_entrypoint_redirects_directly_for_public_route(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    data = [{
+        "path": "eboltachev/demo",
+        "url": "http://example.com/demo",
+        "password": "",
+        "name": "demo",
+        "description": "desc",
+        "sources": [],
+    }]
+    main.ROUTERS_FILE.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+
+    async def fake_proxy_request(_request, target_url: str, path_prefix: str):
+        from fastapi.responses import PlainTextResponse
+
+        assert target_url == "http://example.com/demo"
+        assert path_prefix == "/eboltachev/demo"
+        return PlainTextResponse("proxied", status_code=200)
+
+    monkeypatch.setattr(main, "_proxy_request", fake_proxy_request)
+    response = client.get("/eboltachev/demo")
+    assert response.status_code == 200
+    assert response.text == "proxied"
+
+
+def test_password_gate_redirects_when_password_not_set(client: TestClient) -> None:
+    data = [{
+        "path": "eboltachev/demo",
+        "url": "http://example.com/demo",
+        "password": "",
+        "name": "demo",
+        "description": "desc",
+        "sources": [],
+    }]
+    main.ROUTERS_FILE.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+
+    response = client.get("/go/eboltachev/demo", follow_redirects=False)
+    assert response.status_code == 303
+    assert response.headers["location"] == "/eboltachev/demo"
+
+
+def test_entrypoint_proxies_nested_path(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    data = [{
+        "path": "eboltachev/demo",
+        "url": "http://example.com/demo",
+        "password": "",
+        "name": "demo",
+        "description": "desc",
+        "sources": [],
+    }]
+    main.ROUTERS_FILE.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+
+    async def fake_proxy_request(_request, target_url: str, path_prefix: str):
+        from fastapi.responses import PlainTextResponse
+
+        assert target_url == "http://example.com/demo/assets/app.js"
+        assert path_prefix == "/eboltachev/demo"
+        return PlainTextResponse("nested-proxied", status_code=200)
+
+    monkeypatch.setattr(main, "_proxy_request", fake_proxy_request)
+    response = client.get("/eboltachev/demo/assets/app.js")
+    assert response.status_code == 200
+    assert response.text == "nested-proxied"
+
+
+def test_entrypoint_proxies_protected_route_after_password_submit(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    data = [{
+        "path": "eboltachev/demo",
+        "url": "http://example.com/demo",
+        "password": "StrongPassword123!",
+        "name": "demo",
+        "description": "desc",
+        "sources": [],
+    }]
+    main.ROUTERS_FILE.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+
+    async def fake_proxy_request(_request, target_url: str, path_prefix: str):
+        from fastapi.responses import PlainTextResponse
+
+        assert target_url == "http://example.com/demo"
+        assert path_prefix == "/eboltachev/demo"
+        return PlainTextResponse("protected-proxied", status_code=200)
+
+    monkeypatch.setattr(main, "_proxy_request", fake_proxy_request)
+    submit = client.post(
+        "/go/eboltachev/demo",
+        data={"password": "StrongPassword123!"},
+        follow_redirects=False,
+    )
+    assert submit.status_code == 303
+    cookie_name = next(iter(submit.cookies.keys()))
+    client.cookies.set(cookie_name, submit.cookies.get(cookie_name))
+
+    response = client.get("/eboltachev/demo")
+    assert response.status_code == 200
+    assert response.text == "protected-proxied"
+
+
+def test_entrypoint_uses_active_path_cookie_for_root_absolute_assets(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    data = [{
+        "path": "eboltachev/demo",
+        "url": "http://example.com/demo",
+        "password": "",
+        "name": "demo",
+        "description": "desc",
+        "sources": [],
+    }]
+    main.ROUTERS_FILE.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+    client.cookies.set("research_active_path", "eboltachev/demo")
+
+    async def fake_proxy_request(_request, target_url: str, path_prefix: str):
+        from fastapi.responses import PlainTextResponse
+
+        assert target_url == "http://example.com/demo/openapi.json"
+        assert path_prefix == "/eboltachev/demo"
+        return PlainTextResponse("asset-proxied", status_code=200)
+
+    monkeypatch.setattr(main, "_proxy_request", fake_proxy_request)
+    response = client.get("/openapi.json")
+    assert response.status_code == 200
+    assert response.text == "asset-proxied"
