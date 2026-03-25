@@ -123,7 +123,8 @@ def test_password_gate_redirect_on_valid_password(client: TestClient) -> None:
         follow_redirects=False,
     )
     assert response.status_code == 303
-    assert response.headers["location"] == "http://example.com/demo"
+    assert response.headers["location"] == "/eboltachev/demo"
+    assert "research_access_" in response.headers["set-cookie"]
 
 
 def test_password_gate_denies_invalid_password(client: TestClient) -> None:
@@ -196,7 +197,7 @@ def test_password_gate_redirects_when_password_not_set(client: TestClient) -> No
 
     response = client.get("/go/eboltachev/demo", follow_redirects=False)
     assert response.status_code == 303
-    assert response.headers["location"] == "http://example.com/demo"
+    assert response.headers["location"] == "/eboltachev/demo"
 
 
 def test_entrypoint_proxies_nested_path(
@@ -222,3 +223,37 @@ def test_entrypoint_proxies_nested_path(
     response = client.get("/eboltachev/demo/assets/app.js")
     assert response.status_code == 200
     assert response.text == "nested-proxied"
+
+
+def test_entrypoint_proxies_protected_route_after_password_submit(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    data = [{
+        "path": "eboltachev/demo",
+        "url": "http://example.com/demo",
+        "password": "StrongPassword123!",
+        "name": "demo",
+        "description": "desc",
+        "sources": [],
+    }]
+    main.ROUTERS_FILE.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+
+    async def fake_proxy_request(_request, target_url: str):
+        from fastapi.responses import PlainTextResponse
+
+        assert target_url == "http://example.com/demo"
+        return PlainTextResponse("protected-proxied", status_code=200)
+
+    monkeypatch.setattr(main, "_proxy_request", fake_proxy_request)
+    submit = client.post(
+        "/go/eboltachev/demo",
+        data={"password": "StrongPassword123!"},
+        follow_redirects=False,
+    )
+    assert submit.status_code == 303
+    cookie_name = next(iter(submit.cookies.keys()))
+    client.cookies.set(cookie_name, submit.cookies.get(cookie_name))
+
+    response = client.get("/eboltachev/demo")
+    assert response.status_code == 200
+    assert response.text == "protected-proxied"

@@ -5,6 +5,9 @@ import logging
 import os
 import threading
 import time
+import hmac
+import hashlib
+from base64 import urlsafe_b64decode, urlsafe_b64encode
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -35,6 +38,8 @@ INFORMATION_FILE = CONFIGS_DIR / "information.md"
 RATE_LIMIT_MAX_REQUESTS = 120
 RATE_LIMIT_WINDOW_SECONDS = 60
 RATE_LIMIT_KEY_PREFIX = os.getenv("RATE_LIMIT_KEY_PREFIX", "research:rl")
+PASSWORD_GATE_SECRET = os.getenv("PASSWORD_GATE_SECRET", "change-me-in-production")
+PASSWORD_GATE_COOKIE_MAX_AGE = int(os.getenv("PASSWORD_GATE_COOKIE_MAX_AGE", "43200"))
 
 ICON_BY_DOMAIN = {
     "github.com": "/static/icons/github.svg",
@@ -387,6 +392,48 @@ def _resolve_router_target(path: str) -> tuple[dict[str, object] | None, str | N
     return None, None
 
 
+def _access_cookie_name(path: str) -> str:
+    digest = hashlib.sha256(path.encode("utf-8")).hexdigest()[:16]
+    return f"research_access_{digest}"
+
+
+def _build_access_cookie_value(path: str) -> str:
+    issued_at = str(int(time.time()))
+    payload = f"{path}:{issued_at}"
+    signature = hmac.new(
+        PASSWORD_GATE_SECRET.encode("utf-8"),
+        payload.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+    token = f"{payload}:{signature}"
+    return urlsafe_b64encode(token.encode("utf-8")).decode("ascii")
+
+
+def _has_access_cookie(request: Request, path: str) -> bool:
+    raw = request.cookies.get(_access_cookie_name(path))
+    if not raw:
+        return False
+    try:
+        decoded = urlsafe_b64decode(raw.encode("ascii")).decode("utf-8")
+        cookie_path, issued_at_str, signature = decoded.rsplit(":", 2)
+        issued_at = int(issued_at_str)
+    except (ValueError, UnicodeDecodeError):
+        return False
+
+    if cookie_path != path:
+        return False
+    if time.time() - issued_at > PASSWORD_GATE_COOKIE_MAX_AGE:
+        return False
+
+    payload = f"{cookie_path}:{issued_at_str}"
+    expected = hmac.new(
+        PASSWORD_GATE_SECRET.encode("utf-8"),
+        payload.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+    return hmac.compare_digest(signature, expected)
+
+
 async def _proxy_request(request: Request, target_url: str) -> Response:
     hop_by_hop_headers = {
         "connection",
@@ -434,7 +481,7 @@ def research_password_form(request: Request, research_path: str) -> HTMLResponse
         raise HTTPException(status_code=404, detail="Research not found")
 
     if not card.get("password"):
-        return RedirectResponse(url=str(card.get("url")), status_code=303)
+        return RedirectResponse(url=f"/{card.get('path')}", status_code=303)
 
     return templates.TemplateResponse(
         request,
@@ -465,7 +512,17 @@ def research_password_submit(
             status_code=401,
         )
 
-    return RedirectResponse(url=str(card.get("url")), status_code=303)
+    response = RedirectResponse(url=f"/{card.get('path')}", status_code=303)
+    response.set_cookie(
+        key=_access_cookie_name(str(card.get("path"))),
+        value=_build_access_cookie_value(str(card.get("path"))),
+        max_age=PASSWORD_GATE_COOKIE_MAX_AGE,
+        httponly=True,
+        samesite="lax",
+        secure=True,
+        path="/",
+    )
+    return response
 
 @app.get("/healthz")
 def healthz() -> dict[str, str]:
@@ -488,6 +545,8 @@ async def research_entrypoint(request: Request, research_path: str) -> Response:
         raise HTTPException(status_code=404, detail="Research not found")
 
     if card.get("password"):
-        return RedirectResponse(url=f"/go/{card.get('path')}", status_code=307)
+        card_path = str(card.get("path"))
+        if not _has_access_cookie(request, card_path):
+            return RedirectResponse(url=f"/go/{card_path}", status_code=307)
 
     return await _proxy_request(request, target_url)
