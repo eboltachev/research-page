@@ -5,14 +5,18 @@ import logging
 import os
 import threading
 import time
+import hmac
+import hashlib
+from base64 import urlsafe_b64decode, urlsafe_b64encode
 from pathlib import Path
 from urllib.parse import urlparse
 
 import bleach
+import httpx
 import markdown
 import yaml
 from fastapi import FastAPI, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
@@ -34,6 +38,8 @@ INFORMATION_FILE = CONFIGS_DIR / "information.md"
 RATE_LIMIT_MAX_REQUESTS = 120
 RATE_LIMIT_WINDOW_SECONDS = 60
 RATE_LIMIT_KEY_PREFIX = os.getenv("RATE_LIMIT_KEY_PREFIX", "research:rl")
+PASSWORD_GATE_SECRET = os.getenv("PASSWORD_GATE_SECRET", "change-me-in-production")
+PASSWORD_GATE_COOKIE_MAX_AGE = int(os.getenv("PASSWORD_GATE_COOKIE_MAX_AGE", "43200"))
 
 ICON_BY_DOMAIN = {
     "github.com": "/static/icons/github.svg",
@@ -83,7 +89,7 @@ class ExternalLink(BaseModel):
 class RouterRecord(BaseModel):
     path: str = Field(min_length=3)
     url: str
-    password: str = Field(min_length=1)
+    password: str = ""
     name: str = Field(min_length=1)
     description: str = Field(min_length=1)
     sources: list[SourceRecord] = Field(default_factory=list)
@@ -363,11 +369,119 @@ def _find_router_by_path(path: str) -> dict[str, object] | None:
     return None
 
 
+def _resolve_router_target(path: str) -> tuple[dict[str, object] | None, str | None]:
+    norm = path.strip("/")
+    cards = sorted(cache.get_cards(), key=lambda item: len(str(item.get("path", ""))), reverse=True)
+
+    for card in cards:
+        card_path = str(card.get("path", "")).strip("/")
+        if not card_path:
+            continue
+
+        if norm == card_path:
+            return card, str(card.get("url"))
+
+        prefix = f"{card_path}/"
+        if norm.startswith(prefix):
+            suffix = norm[len(prefix) :]
+            target = str(card.get("url")).rstrip("/")
+            if suffix:
+                target = f"{target}/{suffix}"
+            return card, target
+
+    return None, None
+
+
+def _access_cookie_name(path: str) -> str:
+    digest = hashlib.sha256(path.encode("utf-8")).hexdigest()[:16]
+    return f"research_access_{digest}"
+
+
+def _build_access_cookie_value(path: str) -> str:
+    issued_at = str(int(time.time()))
+    payload = f"{path}:{issued_at}"
+    signature = hmac.new(
+        PASSWORD_GATE_SECRET.encode("utf-8"),
+        payload.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+    token = f"{payload}:{signature}"
+    return urlsafe_b64encode(token.encode("utf-8")).decode("ascii")
+
+
+def _has_access_cookie(request: Request, path: str) -> bool:
+    raw = request.cookies.get(_access_cookie_name(path))
+    if not raw:
+        return False
+    try:
+        decoded = urlsafe_b64decode(raw.encode("ascii")).decode("utf-8")
+        cookie_path, issued_at_str, signature = decoded.rsplit(":", 2)
+        issued_at = int(issued_at_str)
+    except (ValueError, UnicodeDecodeError):
+        return False
+
+    if cookie_path != path:
+        return False
+    if time.time() - issued_at > PASSWORD_GATE_COOKIE_MAX_AGE:
+        return False
+
+    payload = f"{cookie_path}:{issued_at_str}"
+    expected = hmac.new(
+        PASSWORD_GATE_SECRET.encode("utf-8"),
+        payload.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+    return hmac.compare_digest(signature, expected)
+
+
+async def _proxy_request(request: Request, target_url: str) -> Response:
+    hop_by_hop_headers = {
+        "connection",
+        "keep-alive",
+        "proxy-authenticate",
+        "proxy-authorization",
+        "te",
+        "trailers",
+        "transfer-encoding",
+        "upgrade",
+    }
+    outgoing_headers = {
+        key: value
+        for key, value in request.headers.items()
+        if key.lower() not in hop_by_hop_headers and key.lower() != "host"
+    }
+    body = await request.body()
+
+    async with httpx.AsyncClient(timeout=60.0, follow_redirects=False) as client:
+        upstream = await client.request(
+            method=request.method,
+            url=target_url,
+            headers=outgoing_headers,
+            params=request.query_params,
+            content=body,
+        )
+
+    response_headers = {
+        key: value
+        for key, value in upstream.headers.items()
+        if key.lower() not in hop_by_hop_headers
+    }
+    return Response(
+        content=upstream.content,
+        status_code=upstream.status_code,
+        headers=response_headers,
+        media_type=upstream.headers.get("content-type"),
+    )
+
+
 @app.get("/go/{research_path:path}", response_class=HTMLResponse)
 def research_password_form(request: Request, research_path: str) -> HTMLResponse:
     card = _find_router_by_path(research_path)
     if not card:
         raise HTTPException(status_code=404, detail="Research not found")
+
+    if not card.get("password"):
+        return RedirectResponse(url=f"/{card.get('path')}", status_code=303)
 
     return templates.TemplateResponse(
         request,
@@ -398,7 +512,17 @@ def research_password_submit(
             status_code=401,
         )
 
-    return RedirectResponse(url=str(card.get("url")), status_code=303)
+    response = RedirectResponse(url=f"/{card.get('path')}", status_code=303)
+    response.set_cookie(
+        key=_access_cookie_name(str(card.get("path"))),
+        value=_build_access_cookie_value(str(card.get("path"))),
+        max_age=PASSWORD_GATE_COOKIE_MAX_AGE,
+        httponly=True,
+        samesite="lax",
+        secure=True,
+        path="/",
+    )
+    return response
 
 @app.get("/healthz")
 def healthz() -> dict[str, str]:
@@ -408,3 +532,21 @@ def healthz() -> dict[str, str]:
 @app.get("/metrics", response_class=PlainTextResponse)
 def metrics_endpoint() -> str:
     return prometheus_text(metrics)
+
+
+@app.api_route(
+    "/{research_path:path}",
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"],
+    response_model=None,
+)
+async def research_entrypoint(request: Request, research_path: str) -> Response:
+    card, target_url = _resolve_router_target(research_path)
+    if not card or not target_url:
+        raise HTTPException(status_code=404, detail="Research not found")
+
+    if card.get("password"):
+        card_path = str(card.get("path"))
+        if not _has_access_cookie(request, card_path):
+            return RedirectResponse(url=f"/go/{card_path}", status_code=307)
+
+    return await _proxy_request(request, target_url)
