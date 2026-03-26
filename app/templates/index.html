@@ -7,15 +7,13 @@
   <article class="card">
     <div class="card-edge"></div>
     <div class="card-layout">
-      <div class="card-number">{{ "%02d"|format(loop.index) }}</div>
       <div class="card-content">
         <h2>
-          <a href="/go/{{ card.path }}">
-            {{ card.name }}
-            <span class="title-arrow" aria-hidden="true">↗</span>
+          <a href="/{{ card.path }}">
+            {{ card.name | replace('\n', ' ') | replace('\r', ' ') }}
           </a>
         </h2>
-        <p>{{ card.description }}</p>
+        <p>{{ card.description | replace('\n', ' ') | replace('\r', ' ') }}</p>
 
         {% if card.sources %}
         <div class="links">
@@ -33,7 +31,6 @@
   <article class="card empty">
     <div class="card-edge"></div>
     <div class="card-layout">
-      <div class="card-number">00</div>
       <div class="card-content">
         <h2>Нет исследований</h2>
         <p>Добавьте записи в <code>configs/routers.yml</code>.</p>

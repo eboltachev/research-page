@@ -11,6 +11,11 @@ docker compose up --build -d
 ## Конфигурация
 
 - `configs/routers.yml` — список карточек исследований (`path`, `url`, `password`, `name`, `description`, `sources`).
+  - Публичная точка входа строится как `https://research.aicorex.tech/<path>`.
+  - Если `password` пустой, запросы на `/<path>` и вложенные пути (`/<path>/...`) проксируются на `url` без изменения адресной строки браузера.
+  - Для приложений, которые отдают абсолютные пути (например, `/openapi.json` из `/docs`), сохраняется `research_active_path` cookie и такие запросы также проксируются в активный upstream.
+  - Если `password` задан, `/<path>` ведёт на форму `/go/<path>` с проверкой пароля; после успешного ввода ставится signed cookie, и далее `/<path>` проксируется без смены URL.
+  - Для проксируемых приложений выставляется отдельный CSP-профиль (разрешены `script/style/connect`), чтобы корректно работали Swagger/OpenAPI UI и другие SPA на постфиксных путях.
   - `sources` поддерживает формат `[{ href, label? }]`.
   - Для обратной совместимости также принимается устаревшее поле `external`.
 - `configs/information.md` — markdown-контент страницы `/information`.
