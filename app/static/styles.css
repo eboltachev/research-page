@@ -125,13 +125,6 @@ body {
   padding: 1.4rem;
 }
 
-.card-number {
-  font-size: clamp(2rem, 4vw, 3rem);
-  font-weight: 300;
-  letter-spacing: -0.08em;
-  color: rgba(255, 255, 255, 0.28);
-}
-
 .card-content {
   display: flex;
   min-height: 176px;
@@ -163,12 +156,6 @@ body {
 .page-footer a:focus-visible {
   outline: 2px solid rgba(139, 231, 255, 0.9);
   outline-offset: 2px;
-}
-
-.title-arrow {
-  font-size: 0.8em;
-  margin-left: 0.35rem;
-  color: rgba(255, 255, 255, 0.45);
 }
 
 .card p {
