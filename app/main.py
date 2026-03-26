@@ -138,6 +138,14 @@ class RouterRecord(BaseModel):
     def validate_path(cls, value: str) -> str:
         return normalize_and_validate_path(value)
 
+    @field_validator("name", "description")
+    @classmethod
+    def normalize_text_fields(cls, value: str) -> str:
+        normalized = " ".join(value.split())
+        if not normalized:
+            raise ValueError("value must not be blank")
+        return normalized
+
 
 class ConfigCache:
     def __init__(self) -> None:

@@ -79,6 +79,25 @@ def test_external_links_sorted(client: TestClient) -> None:
     assert github_pos < kaggle_pos
 
 
+def test_name_and_description_are_normalized(client: TestClient) -> None:
+    data = [
+        {
+            "path": "eboltachev/demo",
+            "url": "http://example.com/demo",
+            "password": "",
+            "name": "Multimodal\nIntelligent\nSearch\nSystem",
+            "description": "Интеллектуальная\nсистема\nпоиска",
+            "sources": [],
+        }
+    ]
+    main.ROUTERS_FILE.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+
+    response = client.get("/")
+    assert response.status_code == 200
+    assert "Multimodal Intelligent Search System" in response.text
+    assert "Интеллектуальная система поиска" in response.text
+
+
 def test_information_sanitized(client: TestClient) -> None:
     main.INFORMATION_FILE.write_text("# title\n<script>alert(1)</script>", encoding="utf-8")
 
