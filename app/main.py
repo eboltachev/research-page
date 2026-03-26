@@ -450,6 +450,7 @@ async def _proxy_request(request: Request, target_url: str, path_prefix: str) ->
         for key, value in request.headers.items()
         if key.lower() not in hop_by_hop_headers and key.lower() != "host"
     }
+    outgoing_headers["accept-encoding"] = "identity"
     body = await request.body()
 
     async with httpx.AsyncClient(timeout=60.0, follow_redirects=False) as client:
@@ -466,6 +467,7 @@ async def _proxy_request(request: Request, target_url: str, path_prefix: str) ->
         for key, value in upstream.headers.items()
         if key.lower() not in hop_by_hop_headers
     }
+    response_headers.pop("content-length", None)
 
     location = response_headers.get("location")
     if location and location.startswith("/"):
@@ -479,6 +481,8 @@ async def _proxy_request(request: Request, target_url: str, path_prefix: str) ->
         html = html.replace('src="/', f'src="{path_prefix}/')
         html = html.replace("url: '/", f"url: '{path_prefix}/")
         content = html.encode("utf-8")
+        response_headers.pop("content-encoding", None)
+        response_headers.pop("etag", None)
 
     return Response(
         content=content,
