@@ -53,6 +53,8 @@ def test_invalid_router_record_does_not_break_page(client: TestClient) -> None:
     assert response.status_code == 200
     assert "ok" in response.text
     assert "/eboltachev/demo" in response.text
+    assert "card-number" not in response.text
+    assert "title-arrow" not in response.text
     assert "broken" not in response.text
 
 
