@@ -287,3 +287,29 @@ def test_entrypoint_uses_active_path_cookie_for_root_absolute_assets(
     response = client.get("/openapi.json")
     assert response.status_code == 200
     assert response.text == "asset-proxied"
+
+
+def test_proxy_route_uses_relaxed_csp_for_embedded_apps(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    data = [{
+        "path": "eboltachev/demo",
+        "url": "http://example.com/demo",
+        "password": "",
+        "name": "demo",
+        "description": "desc",
+        "sources": [],
+    }]
+    main.ROUTERS_FILE.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+
+    async def fake_proxy_request(_request, _target_url: str, _path_prefix: str):
+        from fastapi.responses import HTMLResponse
+
+        return HTMLResponse("<html><body>ok</body></html>", status_code=200)
+
+    monkeypatch.setattr(main, "_proxy_request", fake_proxy_request)
+    response = client.get("/eboltachev/demo/docs")
+    assert response.status_code == 200
+    assert "script-src 'self' 'unsafe-inline' 'unsafe-eval'" in response.headers[
+        "content-security-policy"
+    ]

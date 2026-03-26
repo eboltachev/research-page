@@ -74,6 +74,8 @@ logger.handlers.clear()
 logger.addHandler(handler)
 logger.setLevel(logging.INFO)
 
+CORE_ROUTES = {"/", "/information", "/healthz", "/metrics"}
+
 
 class SourceRecord(BaseModel):
     href: str
@@ -316,14 +318,30 @@ async def security_and_rate_limit(request: Request, call_next):
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-    response.headers["Content-Security-Policy"] = (
-        "default-src 'self'; "
-        "img-src 'self' data:; "
-        "style-src 'self'; "
-        "script-src 'none'; "
-        "base-uri 'self'; "
-        "frame-ancestors 'none'"
-    )
+    if (
+        request.url.path.startswith("/go/")
+        or request.url.path.startswith("/static/")
+        or request.url.path in CORE_ROUTES
+    ):
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; "
+            "img-src 'self' data:; "
+            "style-src 'self'; "
+            "script-src 'none'; "
+            "base-uri 'self'; "
+            "frame-ancestors 'none'"
+        )
+    else:
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self' data: blob: http: https:; "
+            "img-src * data: blob:; "
+            "style-src 'self' 'unsafe-inline' http: https:; "
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval' http: https:; "
+            "connect-src * data: blob:; "
+            "font-src 'self' data: http: https:; "
+            "base-uri 'self'; "
+            "frame-ancestors 'none'"
+        )
 
     elapsed_ms = (time.perf_counter() - started) * 1000
     if elapsed_ms >= 1000:
