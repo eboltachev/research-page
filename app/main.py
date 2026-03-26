@@ -254,11 +254,22 @@ def _load_routers_uncached() -> list[dict[str, object]]:
         return []
 
     with ROUTERS_FILE.open("r", encoding="utf-8") as f:
-        raw = yaml.safe_load(f) or []
+        documents = list(yaml.safe_load_all(f))
 
-    if not isinstance(raw, list):
-        logger.error("configs/routers.yml must contain a list")
-        return []
+    raw: list[object] = []
+    for doc_idx, doc in enumerate(documents, start=1):
+        if doc is None:
+            continue
+        if isinstance(doc, list):
+            raw.extend(doc)
+            continue
+        if isinstance(doc, dict) and isinstance(doc.get("routers"), list):
+            raw.extend(doc["routers"])
+            continue
+        logger.warning(
+            "Skipped YAML document %s in configs/routers.yml: expected list or {routers: [...]}",
+            doc_idx,
+        )
 
     cards: list[dict[str, object]] = []
     for idx, item in enumerate(raw, start=1):

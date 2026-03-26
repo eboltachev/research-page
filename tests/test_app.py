@@ -56,6 +56,48 @@ def test_invalid_router_record_does_not_break_page(client: TestClient) -> None:
     assert "broken" not in response.text
 
 
+def test_loads_routers_from_multiple_yaml_documents(client: TestClient) -> None:
+    main.ROUTERS_FILE.write_text(
+        """
+- path: eboltachev/demo-1
+  url: http://example.com/demo-1
+  password: ""
+  name: demo-1
+  description: desc-1
+---
+- path: eboltachev/demo-2
+  url: http://example.com/demo-2
+  password: ""
+  name: demo-2
+  description: desc-2
+""".strip(),
+        encoding="utf-8",
+    )
+
+    response = client.get("/")
+    assert response.status_code == 200
+    assert "/eboltachev/demo-1" in response.text
+    assert "/eboltachev/demo-2" in response.text
+
+
+def test_loads_routers_from_routers_key(client: TestClient) -> None:
+    main.ROUTERS_FILE.write_text(
+        """
+routers:
+  - path: eboltachev/demo-3
+    url: http://example.com/demo-3
+    password: ""
+    name: demo-3
+    description: desc-3
+""".strip(),
+        encoding="utf-8",
+    )
+
+    response = client.get("/")
+    assert response.status_code == 200
+    assert "/eboltachev/demo-3" in response.text
+
+
 def test_external_links_sorted(client: TestClient) -> None:
     data = [
         {
