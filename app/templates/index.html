@@ -10,7 +10,7 @@
       <div class="card-number">{{ "%02d"|format(loop.index) }}</div>
       <div class="card-content">
         <h2>
-          <a href="/go/{{ card.path }}">
+          <a href="/{{ card.path }}">
             {{ card.name }}
             <span class="title-arrow" aria-hidden="true">↗</span>
           </a>
