@@ -121,21 +121,16 @@ body {
 
 .card-layout {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 1.25rem;
   padding: 1.4rem;
-}
-
-.card-number {
-  font-size: clamp(2rem, 4vw, 3rem);
-  font-weight: 300;
-  letter-spacing: -0.08em;
-  color: rgba(255, 255, 255, 0.28);
 }
 
 .card-content {
   display: flex;
   min-height: 176px;
   flex-direction: column;
+  width: 100%;
 }
 
 .card h2 {
@@ -144,6 +139,10 @@ body {
   font-weight: 500;
   line-height: 1.18;
   letter-spacing: -0.05em;
+  width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .card h2 a {
@@ -165,18 +164,15 @@ body {
   outline-offset: 2px;
 }
 
-.title-arrow {
-  font-size: 0.8em;
-  margin-left: 0.35rem;
-  color: rgba(255, 255, 255, 0.45);
-}
-
 .card p {
   margin: 0;
-  max-width: 70ch;
+  width: 100%;
   font-size: clamp(0.95rem, 2vw, 0.98rem);
   line-height: 1.75;
   color: rgba(255, 255, 255, 0.68);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .links {
