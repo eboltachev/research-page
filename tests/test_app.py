@@ -304,7 +304,24 @@ def test_entrypoint_proxies_protected_route_after_password_submit(
     assert response.text == "protected-proxied"
 
 
-def test_entrypoint_uses_active_path_cookie_for_root_absolute_assets(
+def test_entrypoint_returns_404_for_root_absolute_assets_without_project_prefix(
+    client: TestClient,
+) -> None:
+    data = [{
+        "path": "eboltachev/demo",
+        "url": "http://example.com/demo",
+        "password": "",
+        "name": "demo",
+        "description": "desc",
+        "sources": [],
+    }]
+    main.ROUTERS_FILE.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+
+    response = client.get("/openapi.json")
+    assert response.status_code == 404
+
+
+def test_entrypoint_routes_root_absolute_assets_using_referer_context(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     data = [{
@@ -316,7 +333,6 @@ def test_entrypoint_uses_active_path_cookie_for_root_absolute_assets(
         "sources": [],
     }]
     main.ROUTERS_FILE.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
-    client.cookies.set("research_active_path", "eboltachev/demo")
 
     async def fake_proxy_request(_request, target_url: str, path_prefix: str):
         from fastapi.responses import PlainTextResponse
@@ -326,7 +342,10 @@ def test_entrypoint_uses_active_path_cookie_for_root_absolute_assets(
         return PlainTextResponse("asset-proxied", status_code=200)
 
     monkeypatch.setattr(main, "_proxy_request", fake_proxy_request)
-    response = client.get("/openapi.json")
+    response = client.get(
+        "/openapi.json",
+        headers={"referer": "https://research.aicorex.tech/eboltachev/demo/docs"},
+    )
     assert response.status_code == 200
     assert response.text == "asset-proxied"
 
