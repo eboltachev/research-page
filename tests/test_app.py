@@ -321,6 +321,35 @@ def test_entrypoint_returns_404_for_root_absolute_assets_without_project_prefix(
     assert response.status_code == 404
 
 
+def test_entrypoint_routes_root_absolute_assets_using_referer_context(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    data = [{
+        "path": "eboltachev/demo",
+        "url": "http://example.com/demo",
+        "password": "",
+        "name": "demo",
+        "description": "desc",
+        "sources": [],
+    }]
+    main.ROUTERS_FILE.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+
+    async def fake_proxy_request(_request, target_url: str, path_prefix: str):
+        from fastapi.responses import PlainTextResponse
+
+        assert target_url == "http://example.com/demo/openapi.json"
+        assert path_prefix == "/eboltachev/demo"
+        return PlainTextResponse("asset-proxied", status_code=200)
+
+    monkeypatch.setattr(main, "_proxy_request", fake_proxy_request)
+    response = client.get(
+        "/openapi.json",
+        headers={"referer": "https://research.aicorex.tech/eboltachev/demo/docs"},
+    )
+    assert response.status_code == 200
+    assert response.text == "asset-proxied"
+
+
 def test_proxy_route_uses_relaxed_csp_for_embedded_apps(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
