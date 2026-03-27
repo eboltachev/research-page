@@ -421,6 +421,28 @@ def _resolve_router_target(path: str) -> tuple[dict[str, object] | None, str | N
     return None, None
 
 
+def _resolve_target_from_referer(
+    request: Request, research_path: str
+) -> tuple[dict[str, object] | None, str | None]:
+    referer = request.headers.get("referer")
+    if not referer:
+        return None, None
+
+    parsed = urlparse(referer)
+    if not parsed.path:
+        return None, None
+
+    card, _ = _resolve_router_target(parsed.path)
+    if not card:
+        return None, None
+
+    target = str(card.get("url")).rstrip("/")
+    suffix = research_path.strip("/")
+    if suffix:
+        target = f"{target}/{suffix}"
+    return card, target
+
+
 def _access_cookie_name(path: str) -> str:
     digest = hashlib.sha256(path.encode("utf-8")).hexdigest()[:16]
     return f"research_access_{digest}"
@@ -504,12 +526,28 @@ async def _proxy_request(request: Request, target_url: str, path_prefix: str) ->
 
     content = upstream.content
     content_type = upstream.headers.get("content-type", "")
-    if "text/html" in content_type and content:
-        html = content.decode("utf-8", errors="ignore")
-        html = html.replace('href="/', f'href="{path_prefix}/')
-        html = html.replace('src="/', f'src="{path_prefix}/')
-        html = html.replace("url: '/", f"url: '{path_prefix}/")
-        content = html.encode("utf-8")
+    is_rewritable_text = any(
+        token in content_type
+        for token in (
+            "text/html",
+            "application/javascript",
+            "text/javascript",
+            "application/x-javascript",
+            "text/css",
+        )
+    )
+    if is_rewritable_text and content:
+        text = content.decode("utf-8", errors="ignore")
+        if "text/html" in content_type:
+            text = text.replace('href="/', f'href="{path_prefix}/')
+            text = text.replace('src="/', f'src="{path_prefix}/')
+            text = text.replace("url: '/", f"url: '{path_prefix}/")
+
+        text = text.replace('"/', f'"{path_prefix}/')
+        text = text.replace("'/", f"'{path_prefix}/")
+        text = text.replace("url(/", f"url({path_prefix}/")
+
+        content = text.encode("utf-8")
         response_headers.pop("content-encoding", None)
         response_headers.pop("etag", None)
 
@@ -589,11 +627,7 @@ def metrics_endpoint() -> str:
 async def research_entrypoint(request: Request, research_path: str) -> Response:
     card, target_url = _resolve_router_target(research_path)
     if not card or not target_url:
-        active_path = request.cookies.get("research_active_path")
-        active_card = _find_router_by_path(active_path) if active_path else None
-        if active_card:
-            target_url = f"{str(active_card.get('url')).rstrip('/')}/{research_path.strip('/')}"
-            card = active_card
+        card, target_url = _resolve_target_from_referer(request, research_path)
 
     if not card or not target_url:
         raise HTTPException(status_code=404, detail="Research not found")
@@ -604,13 +638,4 @@ async def research_entrypoint(request: Request, research_path: str) -> Response:
             return RedirectResponse(url=f"/go/{card_path}", status_code=307)
 
     response = await _proxy_request(request, target_url, f"/{card.get('path')}")
-    response.set_cookie(
-        key="research_active_path",
-        value=str(card.get("path")),
-        max_age=PASSWORD_GATE_COOKIE_MAX_AGE,
-        httponly=True,
-        samesite="lax",
-        secure=True,
-        path="/",
-    )
     return response
