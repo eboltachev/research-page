@@ -304,8 +304,8 @@ def test_entrypoint_proxies_protected_route_after_password_submit(
     assert response.text == "protected-proxied"
 
 
-def test_entrypoint_uses_active_path_cookie_for_root_absolute_assets(
-    client: TestClient, monkeypatch: pytest.MonkeyPatch
+def test_entrypoint_returns_404_for_root_absolute_assets_without_project_prefix(
+    client: TestClient,
 ) -> None:
     data = [{
         "path": "eboltachev/demo",
@@ -316,19 +316,9 @@ def test_entrypoint_uses_active_path_cookie_for_root_absolute_assets(
         "sources": [],
     }]
     main.ROUTERS_FILE.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
-    client.cookies.set("research_active_path", "eboltachev/demo")
 
-    async def fake_proxy_request(_request, target_url: str, path_prefix: str):
-        from fastapi.responses import PlainTextResponse
-
-        assert target_url == "http://example.com/demo/openapi.json"
-        assert path_prefix == "/eboltachev/demo"
-        return PlainTextResponse("asset-proxied", status_code=200)
-
-    monkeypatch.setattr(main, "_proxy_request", fake_proxy_request)
     response = client.get("/openapi.json")
-    assert response.status_code == 200
-    assert response.text == "asset-proxied"
+    assert response.status_code == 404
 
 
 def test_proxy_route_uses_relaxed_csp_for_embedded_apps(
