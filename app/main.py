@@ -16,8 +16,9 @@ import httpx
 import markdown
 import yaml
 from fastapi import FastAPI, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.background import BackgroundTask
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
@@ -482,14 +483,15 @@ async def _proxy_request(request: Request, target_url: str, path_prefix: str) ->
     outgoing_headers["accept-encoding"] = "identity"
     body = await request.body()
 
-    async with httpx.AsyncClient(timeout=60.0, follow_redirects=False) as client:
-        upstream = await client.request(
-            method=request.method,
-            url=target_url,
-            headers=outgoing_headers,
-            params=request.query_params,
-            content=body,
-        )
+    client = httpx.AsyncClient(timeout=None, follow_redirects=False)
+    req = client.build_request(
+        method=request.method,
+        url=target_url,
+        headers=outgoing_headers,
+        params=request.query_params,
+        content=body,
+    )
+    upstream = await client.send(req, stream=True)
 
     response_headers = {
         key: value
@@ -502,22 +504,39 @@ async def _proxy_request(request: Request, target_url: str, path_prefix: str) ->
     if location and location.startswith("/"):
         response_headers["location"] = f"{path_prefix}{location}"
 
-    content = upstream.content
     content_type = upstream.headers.get("content-type", "")
-    if "text/html" in content_type and content:
+
+    if "text/html" in content_type:
+        content = await upstream.aread()
         html = content.decode("utf-8", errors="ignore")
         html = html.replace('href="/', f'href="{path_prefix}/')
         html = html.replace('src="/', f'src="{path_prefix}/')
         html = html.replace("url: '/", f"url: '{path_prefix}/")
-        content = html.encode("utf-8")
         response_headers.pop("content-encoding", None)
         response_headers.pop("etag", None)
+        await upstream.aclose()
+        await client.aclose()
+        return Response(
+            content=html.encode("utf-8"),
+            status_code=upstream.status_code,
+            headers=response_headers,
+            media_type=content_type,
+        )
 
-    return Response(
-        content=content,
+    async def _stream_bytes():
+        async for chunk in upstream.aiter_bytes():
+            yield chunk
+
+    async def _close_upstream() -> None:
+        await upstream.aclose()
+        await client.aclose()
+
+    return StreamingResponse(
+        _stream_bytes(),
         status_code=upstream.status_code,
         headers=response_headers,
-        media_type=upstream.headers.get("content-type"),
+        media_type=content_type,
+        background=BackgroundTask(_close_upstream),
     )
 
 
